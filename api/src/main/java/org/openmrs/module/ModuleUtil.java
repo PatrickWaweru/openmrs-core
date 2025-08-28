@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.regex.Matcher;
@@ -849,6 +850,7 @@ public class ModuleUtil {
 	 */
 	public static AbstractRefreshableApplicationContext refreshApplicationContext(AbstractRefreshableApplicationContext ctx,
 	        boolean isOpenmrsStartup, Module startedModule) {
+	 	Map<String, Long> startTimes = new ConcurrentHashMap<>();
 		long start = System.currentTimeMillis();
 		try {
 			System.err.println("CORE: Refreshing Context for Module: " + startedModule.getModuleId());
@@ -862,6 +864,8 @@ public class ModuleUtil {
 						Thread.currentThread().setContextClassLoader(ModuleFactory.getModuleClassLoader(module));
 						module.getModuleActivator().willRefreshContext();
 						System.err.println("CORE: Module: " + module.getModuleId() + " Will refresh context");
+						long startime = System.currentTimeMillis();
+						startTimes.put(module.getModuleId(), startime);
 					}
 				}
 				catch (Exception e) {
@@ -922,7 +926,11 @@ public class ModuleUtil {
 						
 						if (module.getModuleActivator() != null) {
 							module.getModuleActivator().contextRefreshed();
-							System.err.println("CORE: Module: " + module.getModuleId() + " context refreshed");
+							try {
+								Long startime = startTimes.get(module.getModuleId());
+								long elapsed = System.currentTimeMillis() - startime;
+								System.err.println("CORE: Module: " + module.getModuleId() + " context refreshed in: " + elapsed + " ms");
+							} catch(Exception em) {}
 							try {
 								//if it is system start up, call the started method for all started modules
 								if (isOpenmrsStartup) {
