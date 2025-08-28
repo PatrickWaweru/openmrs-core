@@ -573,35 +573,48 @@ public class ModuleFactory {
 	 */
 	public static Module startModule(Module module, boolean isOpenmrsStartup,
 	        AbstractRefreshableApplicationContext applicationContext) throws ModuleException {
-		
-		if (!requiredModulesStarted(module)) {
-			int missingModules = 0;
-			
-			for (String packageName : module.getRequiredModulesMap().keySet()) {
-				Module mod = getModuleByPackage(packageName);
+		long start = System.currentTimeMillis();
+		System.err.println("CORE: Starting Module: " + module.getModuleId());
+    	try {
+			if (!requiredModulesStarted(module)) {
+				int missingModules = 0;
 				
-				// mod not installed
-				if (mod == null) {
-					missingModules++;
-					continue;
+				for (String packageName : module.getRequiredModulesMap().keySet()) {
+					Module mod = getModuleByPackage(packageName);
+					
+					// mod not installed
+					if (mod == null) {
+						missingModules++;
+						continue;
+					}
+					
+					if (!mod.isStarted()) {
+						startModule(mod);
+					}
 				}
 				
-				if (!mod.isStarted()) {
-					startModule(mod);
+				if (missingModules > 0) {
+					String message = getFailedToStartModuleMessage(module);
+					log.error(message);
+					module.setStartupErrorMessage(message);
+					notifySuperUsersAboutModuleFailure(module);
+					// instead of return null, i realized that Daemon.startModule() always returns a Module
+					// object,irrespective of whether the startup succeeded
+					return module;
 				}
 			}
-			
-			if (missingModules > 0) {
-				String message = getFailedToStartModuleMessage(module);
-				log.error(message);
-				module.setStartupErrorMessage(message);
-				notifySuperUsersAboutModuleFailure(module);
-				// instead of return null, i realized that Daemon.startModule() always returns a Module
-				// object,irrespective of whether the startup succeeded
-				return module;
-			}
+			return Daemon.startModule(module, isOpenmrsStartup, applicationContext);
+		} catch(Exception ex) {
+			log.info("CORE: Module ERROR [{}] failed to start: {}", module.getModuleId(), ex.getMessage());
+			System.err.println("CORE: Module ERROR [" + module.getModuleId() + "] failed to start: " + ex.getMessage());
+			ex.printStackTrace();
+			return(module);
 		}
-		return Daemon.startModule(module, isOpenmrsStartup, applicationContext);
+		finally {
+			long elapsed = System.currentTimeMillis() - start;
+			log.info("CORE: Module [{}] started in {} ms", module.getModuleId(), elapsed);
+			System.err.println("CORE: Module [" + module.getModuleId() + "] started in " + elapsed + " ms");
+		}
 	}
 	
 	/**

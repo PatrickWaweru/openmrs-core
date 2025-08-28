@@ -849,100 +849,122 @@ public class ModuleUtil {
 	 */
 	public static AbstractRefreshableApplicationContext refreshApplicationContext(AbstractRefreshableApplicationContext ctx,
 	        boolean isOpenmrsStartup, Module startedModule) {
-		//notify all started modules that we are about to refresh the context
-		Set<Module> startedModules = new LinkedHashSet<>(ModuleFactory.getStartedModulesInOrder());
-		for (Module module : startedModules) {
-			try {
-				if (module.getModuleActivator() != null) {
-					Thread.currentThread().setContextClassLoader(ModuleFactory.getModuleClassLoader(module));
-					module.getModuleActivator().willRefreshContext();
-				}
-			}
-			catch (Exception e) {
-				log.warn("Unable to call willRefreshContext() method in the module's activator", e);
-			}
-		}
-		
-		OpenmrsClassLoader.saveState();
-		SchedulerUtil.shutdown();
-		ServiceContext.destroyInstance();
-		
+		long start = System.currentTimeMillis();
 		try {
-			ctx.stop();
-			ctx.close();
-		}
-		catch (Exception e) {
-			log.warn("Exception while stopping and closing context: ", e);
-			// Spring seems to be trying to refresh the context instead of /just/ stopping
-			// pass
-		}
-		OpenmrsClassLoader.destroyInstance();
-		ctx.setClassLoader(OpenmrsClassLoader.getInstance());
-		Thread.currentThread().setContextClassLoader(OpenmrsClassLoader.getInstance());
-		
-		ServiceContext.getInstance().startRefreshingContext();
-		try {
-			ctx.refresh();
-		}
-		finally {
-			ServiceContext.getInstance().doneRefreshingContext();
-		}
-		
-		ctx.setClassLoader(OpenmrsClassLoader.getInstance());
-		Thread.currentThread().setContextClassLoader(OpenmrsClassLoader.getInstance());
-		
-		OpenmrsClassLoader.restoreState();
-		SchedulerUtil.startup(Context.getRuntimeProperties());
-		
-		OpenmrsClassLoader.setThreadsToNewClassLoader();
-		
-		// reload the advice points that were lost when refreshing Spring
-		log.debug("Reloading advice for all started modules: {}", startedModules.size());
-		
-		try {
-			//The call backs in this block may need lazy loading of objects
-			//which will fail because we use an OpenSessionInViewFilter whose opened session
-			//was closed when the application context was refreshed as above.
-			//So we need to open another session now. TRUNK-3739
-			Context.openSessionWithCurrentUser();
+			System.err.println("CORE: Refreshing Context for Module: " + startedModule.getModuleId());
+		} catch(Exception em) {}
+    	try {
+			//notify all started modules that we are about to refresh the context
+			Set<Module> startedModules = new LinkedHashSet<>(ModuleFactory.getStartedModulesInOrder());
 			for (Module module : startedModules) {
-				if (!module.isStarted()) {
-					continue;
-				}
-				
-				ModuleFactory.loadAdvice(module);
 				try {
-					ModuleFactory.passDaemonToken(module);
-					
 					if (module.getModuleActivator() != null) {
-						module.getModuleActivator().contextRefreshed();
-						try {
-							//if it is system start up, call the started method for all started modules
-							if (isOpenmrsStartup) {
-								module.getModuleActivator().started();
-							}
-							//if refreshing the context after a user started or uploaded a new module
-							else if (!isOpenmrsStartup && module.equals(startedModule)) {
-								module.getModuleActivator().started();
-							}
-						}
-						catch (Exception e) {
-							log.warn("Unable to invoke started() method on the module's activator", e);
-							ModuleFactory.stopModule(module, true, true);
-						}
+						Thread.currentThread().setContextClassLoader(ModuleFactory.getModuleClassLoader(module));
+						module.getModuleActivator().willRefreshContext();
+						System.err.println("CORE: Module: " + module.getModuleId() + " Will refresh context");
 					}
-					
 				}
 				catch (Exception e) {
-					log.warn("Unable to invoke method on the module's activator ", e);
+					log.warn("Unable to call willRefreshContext() method in the module's activator", e);
 				}
 			}
+			
+			OpenmrsClassLoader.saveState();
+			SchedulerUtil.shutdown();
+			ServiceContext.destroyInstance();
+			
+			try {
+				ctx.stop();
+				ctx.close();
+			}
+			catch (Exception e) {
+				log.warn("Exception while stopping and closing context: ", e);
+				// Spring seems to be trying to refresh the context instead of /just/ stopping
+				// pass
+			}
+			OpenmrsClassLoader.destroyInstance();
+			ctx.setClassLoader(OpenmrsClassLoader.getInstance());
+			Thread.currentThread().setContextClassLoader(OpenmrsClassLoader.getInstance());
+			
+			ServiceContext.getInstance().startRefreshingContext();
+			try {
+				ctx.refresh();
+			}
+			finally {
+				ServiceContext.getInstance().doneRefreshingContext();
+			}
+			
+			ctx.setClassLoader(OpenmrsClassLoader.getInstance());
+			Thread.currentThread().setContextClassLoader(OpenmrsClassLoader.getInstance());
+			
+			OpenmrsClassLoader.restoreState();
+			SchedulerUtil.startup(Context.getRuntimeProperties());
+			
+			OpenmrsClassLoader.setThreadsToNewClassLoader();
+			
+			// reload the advice points that were lost when refreshing Spring
+			log.debug("Reloading advice for all started modules: {}", startedModules.size());
+			
+			try {
+				//The call backs in this block may need lazy loading of objects
+				//which will fail because we use an OpenSessionInViewFilter whose opened session
+				//was closed when the application context was refreshed as above.
+				//So we need to open another session now. TRUNK-3739
+				Context.openSessionWithCurrentUser();
+				for (Module module : startedModules) {
+					if (!module.isStarted()) {
+						continue;
+					}
+					
+					ModuleFactory.loadAdvice(module);
+					try {
+						ModuleFactory.passDaemonToken(module);
+						
+						if (module.getModuleActivator() != null) {
+							module.getModuleActivator().contextRefreshed();
+							System.err.println("CORE: Module: " + module.getModuleId() + " context refreshed");
+							try {
+								//if it is system start up, call the started method for all started modules
+								if (isOpenmrsStartup) {
+									module.getModuleActivator().started();
+								}
+								//if refreshing the context after a user started or uploaded a new module
+								else if (!isOpenmrsStartup && module.equals(startedModule)) {
+									module.getModuleActivator().started();
+								}
+							}
+							catch (Exception e) {
+								log.warn("Unable to invoke started() method on the module's activator", e);
+								ModuleFactory.stopModule(module, true, true);
+							}
+						}
+						
+					}
+					catch (Exception e) {
+						log.warn("Unable to invoke method on the module's activator ", e);
+					}
+				}
+			}
+			finally {
+				Context.closeSessionWithCurrentUser();
+			}
+			
+			return ctx;
+		} catch(Exception ex) {
+			try {
+				log.info("CORE: Module ERROR [{}] failed to Refresh Context: {}", startedModule.getModuleId(), ex.getMessage());
+				System.err.println("CORE: Module ERROR [" + startedModule.getModuleId() + "] failed to Refresh Context: " + ex.getMessage());
+			} catch(Exception em) {}
+			ex.printStackTrace();
+			return(ctx);
 		}
 		finally {
-			Context.closeSessionWithCurrentUser();
+			try {
+				long elapsed = System.currentTimeMillis() - start;
+				log.info("CORE: Module [{}]  Refreshed Context in {} ms", startedModule.getModuleId(), elapsed);
+				System.err.println("CORE: Module [" + startedModule.getModuleId() + "]  Refreshed Context in " + elapsed + " ms");
+			} catch(Exception em) {}
 		}
-		
-		return ctx;
 	}
 	
 	/**
