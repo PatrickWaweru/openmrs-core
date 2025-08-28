@@ -929,7 +929,7 @@ public class ModuleUtil {
 							try {
 								Long startime = startTimes.get(module.getModuleId());
 								long elapsed = System.currentTimeMillis() - startime;
-								System.err.println("CORE: Module: " + module.getModuleId() + " context refreshed in: " + elapsed + " ms");
+								System.err.println("CORE: Module: " + module.getModuleId() + " context refreshed in: " + formatDuration(elapsed));
 							} catch(Exception em) {}
 							try {
 								//if it is system start up, call the started method for all started modules
@@ -973,6 +973,27 @@ public class ModuleUtil {
 				System.err.println("CORE: Module [" + startedModule.getModuleId() + "]  Refreshed Context in " + elapsed + " ms");
 			} catch(Exception em) {}
 		}
+	}
+
+	/**
+	 * Formats the duration in ms into human format
+	 * @param millis
+	 * @return
+	 */
+	public static String formatDuration(long millis) {
+		long seconds = millis / 1000;
+		long minutes = seconds / 60;
+		long hours   = minutes / 60;
+
+		seconds = seconds % 60;
+		minutes = minutes % 60;
+
+		StringBuilder sb = new StringBuilder();
+		if (hours > 0) sb.append(hours).append("h ");
+		if (minutes > 0) sb.append(minutes).append("m ");
+		sb.append(seconds).append("s");
+
+		return sb.toString().trim();
 	}
 	
 	/**
