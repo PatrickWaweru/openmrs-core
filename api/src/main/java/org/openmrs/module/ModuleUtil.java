@@ -863,7 +863,7 @@ public class ModuleUtil {
 					if (module.getModuleActivator() != null) {
 						Thread.currentThread().setContextClassLoader(ModuleFactory.getModuleClassLoader(module));
 						module.getModuleActivator().willRefreshContext();
-						System.err.println("CORE: Module: " + module.getModuleId() + " Will refresh context");
+						System.err.println("CORE: Module: " + module.getModuleId() + " version: " + module.getVersion() + " Will refresh context");
 						long startime = System.currentTimeMillis();
 						startTimes.put(module.getModuleId(), startime);
 					}
@@ -929,7 +929,7 @@ public class ModuleUtil {
 							try {
 								Long startime = startTimes.get(module.getModuleId());
 								long elapsed = System.currentTimeMillis() - startime;
-								System.err.println("CORE: Module: " + module.getModuleId() + " context refreshed in: " + formatDuration(elapsed));
+								System.err.println("CORE: Module: " + module.getModuleId() + " Version: " + module.getVersion() + " context refreshed in: " + formatDuration(elapsed));
 							} catch(Exception em) {}
 							try {
 								//if it is system start up, call the started method for all started modules
